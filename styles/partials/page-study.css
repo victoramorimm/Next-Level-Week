@@ -280,4 +280,8 @@
         display: initial;
         margin-left: 16px;
     }
+
+    .teacher-item footer button img {
+        margin-right: 1.5rem;
+    } 
 }
