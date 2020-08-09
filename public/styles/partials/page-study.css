@@ -29,7 +29,6 @@
     justify-content: center;
     transition: background 0.2s;
     margin-top: 3.2rem;
-    margin-left: 3.2rem;
 }
 
 #search-teachers button:hover {
@@ -131,6 +130,13 @@
    background: var(--color-secondary-dark);
 }
 
+#page-study main .no-results {
+    max-width: 30rem;
+    margin: 12rem;
+    text-align: center;
+    color: var(--color-text-base);
+}
+
 @media (min-width: 700px) {
     #page-study #container {
         max-width: 100vw;
@@ -171,6 +177,10 @@
         gap: 16px;
         position: absolute;
         bottom: -28px;
+    }
+
+    #search-teachers button {
+        margin-left: 3.2rem;
     }
 
     #page-study main {

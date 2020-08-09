@@ -1,46 +1,6 @@
-const proffys = [
-    {
-        name: "Victor Amorim",
-        avatar: "https://avatars3.githubusercontent.com/u/63806098?s=460&u=8feca71f0c0f06427657a9b1a5950ce864cf14e1&v=4",
-        whatsapp: "99999-9999",
-        bio: "99999-9999",
-        subject: "Irei dar as melhores aulas de Geografia da sua vida, mesmo não sabendo nada sobre.",
-        cost: "20",
-        weekday: [0],
-        time_from: [720],
-        time_to: [1220]
-    }
-];
+const Database = require('./database/db');
 
-const subjects = [
-    "Artes",
-    "Biologia",
-    "Ciências",
-    "Educação Física",
-    "Física",
-    "Geografia",
-    "História",
-    "Matemática",
-    "Português",
-    "Química"
-];
-
-const weekdays = [
-    'Domingo',
-    'Segunda',
-    'Terça-feira',
-    'Quarta-feira',
-    'Quinta-feira',
-    'Sexta-feira',
-    'Sábado',
-    'Domingo'
-];
-
-function getSubject(subjectNumber) {
-    const position = +subjectNumber - 1
-
-    return subjects[position];
-}
+const { subjects, getSubject, weekdays, convertHoursToMinutes } = require('./utils/format')
 
 const express = require("express");
 const { static } = require("express");
@@ -53,29 +13,96 @@ nunjucks.configure('src/views', {
     noCache: true,
 
 });
+
 app.use(static("public"));
+
+//app.use(express.urlenconded({ extended: true }));
+
+app.use(express.urlencoded({ extended: true }));
 
 app.get('/', (request, response) => {
     return response.render('index.html');
 });
 
-app.get('/study', (request, response) => {
+app.get('/study', async (request, response) => {
     const filters = request.query;
-    return response.render('study.html', {proffys, filters, subjects, weekdays});
+
+    if(!filters.subject || !filters.weekday || !filters.time) {
+        return response.render('study.html', {filters, subjects, weekdays});
+    }
+
+    const timeToMinutes = convertHoursToMinutes(filters.time);
+
+    const query = `
+        SELECT classes.*, proffys.*
+        FROM proffys
+        JOIN classes ON (classes.proffy_id = proffys.id)
+        WHERE EXISTS (
+            SELECT class_schedule.*
+            FROM class_schedule
+            WHERE class_schedule.class_id = classes.id
+            AND class_schedule.weekday = ${filters.weekday}
+            AND class_schedule.time_from <=${timeToMinutes}
+            AND class_schedule.time_to > ${timeToMinutes}
+        )
+        AND classes.subject = '${filters.subject}'
+    `
+
+    try {
+        const db = await Database
+        const proffys = await db.all(query);
+
+        proffys.map(proffy => {
+            proffy.subject = getSubject(proffy.subject);
+        })
+
+        return response.render('study.html', { proffys, subjects, filters, weekdays });
+    } catch (error) {
+        console.log(error);
+    }       
+
 });
 
 app.get('/give-classes', (request, response) => {
-    const data = request.query
-
-    const isNotEmpty = Object.keys(data).length > 0
-
-    if (isNotEmpty) {
-      data.subject = getSubject(data.subject);
-      proffys.push(data);
-      return response.redirect("/study");
-    } 
-
     return response.render('give-classes.html', {subjects, weekdays});
 })
+
+app.post('/save-classes', async (request, response) => {
+    const createProffy = require('./database/createProffy');
+    
+    const proffyValue = {
+        name: request.body.name,
+        avatar: request.body.avatar,
+        whatsapp: request.body.whatsapp,
+        bio: request.body.bio
+    }
+
+    const classValue = {
+        subject: request.body.subject,
+        cost: request.body.cost
+    }
+
+    const classScheduleValues = request.body.weekday.map((weekday, index) => {
+        return {
+            weekday,
+            time_from: convertHoursToMinutes(request.body.time_from[index]),
+            time_to: convertHoursToMinutes(request.body.time_to[index])
+        }
+    });
+    
+    try {
+
+     const db = await Database;
+     await createProffy(db, { proffyValue, classValue, classScheduleValues });
+     
+     let queryString = "?subject=" + request.body.subject;
+     queryString += "&weekday=" + request.body.weekday[0];
+     queryString += "&time=" + request.body.time_from[0];
+
+     return response.redirect('/study' + queryString);
+    } catch (error) {
+        console.log(error);
+    }
+});
 
 app.listen(5500);
